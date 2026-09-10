@@ -1,15 +1,15 @@
-import {
+﻿import {
   FilesetResolver,
   PoseLandmarker,
   type PoseLandmarkerResult,
 } from "@mediapipe/tasks-vision";
 
-// MediaPipe WASM + model assets are served from a CDN rather than bundled — the
+// MediaPipe WASM + model assets are served from a CDN rather than bundled, the
 // tasks-vision WASM files don't resolve cleanly through the normal Next import graph.
 const WASM_BASE =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 // "full" is markedly more accurate than "lite" and produces far fewer phantom
-// detections — worth the framerate cost for this use case. Swap to _heavy for
+// detections, worth the framerate cost for this use case. Swap to _heavy for
 // the best accuracy, or _lite if the framerate is too low on weak hardware.
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -109,7 +109,7 @@ export const POSE_CONNECTIONS: ReadonlyArray<[number, number]> = [
   [R_HIP, R_KNEE], [R_KNEE, R_ANKLE],
 ];
 
-/** Body parts a strike could target — used for proximity checks. */
+/** Body parts a strike could target, used for proximity checks. */
 export const TARGET_POINTS = [NOSE, L_SHOULDER, R_SHOULDER, L_HIP, R_HIP];
 
 const VISIBLE = 0.4;
@@ -148,7 +148,7 @@ export function torsoCenter(pose: Pose): { x: number; y: number } | null {
 }
 
 /**
- * A pose is "real" only if it has a confidently visible torso — both shoulders
+ * A pose is "real" only if it has a confidently visible torso, both shoulders
  * and at least one hip. This rejects the partial/phantom skeletons the model
  * emits for background clutter or half-occluded regions.
  */
@@ -160,7 +160,7 @@ export function hasTorso(pose: Pose): boolean {
   );
 }
 
-/** Mean visibility over the core body landmarks, 0..1 — a quality score. */
+/** Mean visibility over the core body landmarks, 0..1, a quality score. */
 export function poseQuality(pose: Pose): number {
   const core = [NOSE, L_SHOULDER, R_SHOULDER, L_HIP, R_HIP, L_KNEE, R_KNEE];
   let sum = 0;

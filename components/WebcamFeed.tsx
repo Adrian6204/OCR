@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Camera } from "@/components/icons";
 
 export type CameraStatus =
   | "idle"
@@ -84,7 +85,7 @@ export default function WebcamFeed({
   }, [attempt]);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl bg-black aspect-video ring-1 ring-white/10">
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-[var(--shadow-2)] ring-1 ring-[var(--line-strong)]">
       <video
         ref={videoRef}
         playsInline
@@ -102,29 +103,37 @@ export default function WebcamFeed({
       {children}
 
       {status !== "ready" && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm">
           <div className="max-w-sm px-6 text-center">
             {status === "requesting" || status === "idle" ? (
               <>
                 <Spinner />
                 <p className="mt-4 text-sm text-white/70">
-                  Requesting camera access…
+                  Requesting camera access
                 </p>
               </>
             ) : status === "denied" ? (
               <>
-                <p className="text-lg font-medium text-white">
+                <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--elevated)]/12 text-[var(--elevated)]">
+                  <Camera size={22} />
+                </span>
+                <p className="mt-4 text-lg font-medium text-white">
                   Camera access blocked
                 </p>
                 <p className="mt-2 text-sm text-white/60">
-                  Enable camera permission for this site in your browser, then
+                  Allow camera permission for this site in your browser, then
                   retry.
                 </p>
                 <RetryButton onClick={() => setAttempt((a) => a + 1)} />
               </>
             ) : (
               <>
-                <p className="text-lg font-medium text-white">Camera error</p>
+                <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--hostile)]/12 text-[var(--hostile)]">
+                  <Camera size={22} />
+                </span>
+                <p className="mt-4 text-lg font-medium text-white">
+                  Camera error
+                </p>
                 <p className="mt-2 text-sm text-white/60">{errorMsg}</p>
                 <RetryButton onClick={() => setAttempt((a) => a + 1)} />
               </>
@@ -138,7 +147,7 @@ export default function WebcamFeed({
 
 function Spinner() {
   return (
-    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-accent" />
+    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-accent" />
   );
 }
 
@@ -146,7 +155,7 @@ function RetryButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="mt-5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink transition hover:bg-accent/90"
+      className="mt-5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-[var(--accent-ink)] transition hover:brightness-110"
     >
       Retry
     </button>

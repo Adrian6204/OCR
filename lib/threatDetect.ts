@@ -1,4 +1,4 @@
-import {
+﻿import {
   armExtension,
   dist,
   hasTorso,
@@ -86,7 +86,7 @@ interface Track {
   pose: Pose;
   center: { x: number; y: number };
   scale: number;
-  /** Consecutive-ish frames this track has been matched — gates display. */
+  /** Consecutive-ish frames this track has been matched, gates display. */
   hits: number;
   /** Peak-held combat signal (fast motion + thrust), decays each frame. */
   combatPeak: number;
@@ -109,8 +109,12 @@ interface Candidate {
   quality: number;
 }
 
+// Raised the hostile bar (was 55) so ordinary fast motion reads as "elevated"
+// rather than "hostile"; a real strike toward someone still clears it.
+const HOSTILE_AT = 62;
+
 function levelFor(threat: number): ThreatLevel {
-  if (threat >= 55) return "hostile";
+  if (threat >= HOSTILE_AT) return "hostile";
   if (threat >= 25) return "elevated";
   return "calm";
 }
@@ -121,7 +125,7 @@ function levelFor(threat: number): ThreatLevel {
  * MediaPipe returns poses without stable identities across frames, so we match
  * each frame's poses to existing tracks by torso-center proximity. Per track we
  * measure wrist speed, arm-extension rate, and closeness of a moving hand to
- * another person's body — the geometric signature of a strike. This is Layer 1:
+ * another person's body, the geometric signature of a strike. This is Layer 1:
  * fast, training-free, and honest about being heuristic (expect false positives
  * from high-fives, sports, or animated gestures).
  */
@@ -129,7 +133,7 @@ export class PersonTracker {
   private tracks: Track[] = [];
   private nextId = 1;
   private lastMs = -1;
-  /** 0..1 — scales the threat score. 0.5 is neutral. */
+  /** 0..1, scales the threat score. 0.5 is neutral. */
   private sensitivity = 0.5;
 
   setSensitivity(value: number) {
@@ -215,7 +219,7 @@ export class PersonTracker {
     // --- Proximity + scoring pass: needs all people positioned this frame ---
     this.scoreProximity(dt);
 
-    // Only surface confirmed tracks seen this frame — this is what removes the
+    // Only surface confirmed tracks seen this frame, this is what removes the
     // swarm of single-frame phantom detections.
     const people: Person[] = this.tracks
       .filter((t) => t.lastSeen === nowMs && t.hits >= MIN_HITS)
@@ -235,7 +239,7 @@ export class PersonTracker {
       people,
       maxThreat,
       level: levelFor(maxThreat),
-      alert: maxThreat >= 55,
+      alert: maxThreat >= HOSTILE_AT,
       weaponDetected: people.some((p) => p.armed),
     };
   }
@@ -388,11 +392,11 @@ export class PersonTracker {
 
       const combat = (t as Track & { _combat?: number })._combat ?? 0;
       const stance = (t as Track & { _stance?: number })._stance ?? 0;
-      // Proximity AMPLIFIES rather than gates: a strong fast strike can reach
-      // the hostile band on its own (base 0.7), and closing on another person
-      // pushes it well past it. This is what lets a real punch register even
-      // when the fist doesn't land exactly on a tracked keypoint.
-      let raw = 100 * combat * (0.7 + 0.5 * near);
+      // Proximity AMPLIFIES rather than gates. Base 0.55 means fast motion on
+      // its own tops out around "elevated"; it takes a strike closing on
+      // another person to reach the hostile band. This keeps real punches
+      // detectable without flagging every quick gesture.
+      let raw = 100 * combat * (0.55 + 0.5 * near);
       raw = Math.max(raw, stance);
 
       // Armed: hold a weapon → at least elevated; armed AND moving → escalate.

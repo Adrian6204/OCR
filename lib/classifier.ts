@@ -1,7 +1,7 @@
-import { FEATURE_DIM, SEQ_LEN } from "./poseSequence";
+﻿import { FEATURE_DIM, SEQ_LEN } from "./poseSequence";
 
 // Optional Layer 2: run the trained ONNX classifier in-browser via
-// onnxruntime-web. Everything here is lazy and model-gated — if
+// onnxruntime-web. Everything here is lazy and model-gated, if
 // /violence.onnx isn't present (no model trained yet), the classifier stays
 // disabled and the app runs on the heuristic alone. onnxruntime-web is imported
 // dynamically so it never enters the SSR/build graph.

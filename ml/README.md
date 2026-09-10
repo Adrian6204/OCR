@@ -47,10 +47,43 @@ python export_onnx.py pose_gru.pt
 
 | File | Role |
 |---|---|
-| `dataset.py` | Loads/validates the exported JSON into tensors (no normalization) |
+| `dataset.py` | Loads/validates JSON into tensors; train-time augmentation (flip/scale/jitter) via `SplitView` |
 | `model.py` | `PoseGRU` — GRU + classification head |
-| `train.py` | Stratified split, class-weighted training, saves best checkpoint |
+| `train.py` | Stratified train/val/test split, augmentation, class weighting, early stopping, LR scheduling; saves best checkpoint + `metrics.json` |
 | `export_onnx.py` | Checkpoint → `public/violence.onnx` (dynamic batch) |
+| `preprocess_dataset.py` | Run MediaPipe over a folder of labeled videos → the same training JSON (the scalable data path) |
+
+## Scaling up with public datasets
+
+Hand-recording works for a first model, but the real accuracy lever is *more,
+more varied* data. `preprocess_dataset.py` turns any folder of labeled videos
+into training JSON — so you can train on public violence datasets (RWF-2000,
+Hockey Fight, Movies Fight) or your own CCTV footage:
+
+```
+videos/
+  normal/   clip1.mp4 ...
+  hostile/  fight1.mp4 ...
+```
+
+```bash
+pip install mediapipe opencv-python
+curl -L -o pose_landmarker_full.task \
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task
+python preprocess_dataset.py --videos-dir ./videos --out ./data/dataset.json
+python train.py --data ./data --epochs 80 --export
+```
+
+It slides a window over each clip to produce many samples, and its
+normalization is a line-for-line port of the web app's `normalizePose`, so
+preprocessed data is interchangeable with capture-tool data.
+
+## Training rigor
+
+`train.py` does a stratified **train/val/test** split, augments only the train
+split, class-weights the loss for imbalance, uses **early stopping** + LR
+scheduling, and writes **precision/recall/F1 + a confusion matrix** for the
+hostile class to `metrics.json`. Use `--no-augment` to compare.
 
 ## Notes
 

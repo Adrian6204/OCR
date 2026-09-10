@@ -22,6 +22,7 @@ import {
   type SampleExport,
 } from "@/lib/poseSequence";
 import type { Person } from "@/lib/threatDetect";
+import { ArrowLeft } from "@/components/icons";
 
 type Label = "normal" | "hostile";
 type ModelStatus = "loading" | "ready" | "error";
@@ -174,26 +175,33 @@ export default function CapturePage() {
   };
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:py-12">
-      <header className="mb-8">
+    <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:py-14">
+      <header className="reveal reveal-1 mb-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[1.9rem]">
             Training data capture
           </h1>
           <Link
             href="/"
-            className="text-sm text-white/50 transition hover:text-white/80"
+            className="group inline-flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/60 transition hover:border-[var(--line-strong)] hover:text-white"
           >
-            ← Back to monitor
+            <ArrowLeft
+              size={13}
+              className="transition-transform group-hover:-translate-x-0.5"
+            />
+            Back to monitor
           </Link>
         </div>
-        <p className="mt-2 max-w-2xl text-sm text-white/50">
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-white/55">
           Record {SEQ_LEN}-frame pose clips labeled{" "}
-          <span className="text-teal-300">normal</span> or{" "}
-          <span className="text-red-300">hostile</span>, then export JSON to
-          train the Layer 2 model (see <code className="text-white/70">ml/</code>).
-          Aim for 30+ balanced samples per label, with variety in position,
-          distance, and speed.
+          <span className="text-[var(--calm)]">normal</span> or{" "}
+          <span className="text-[var(--hostile)]">hostile</span>, then export
+          JSON to train the Layer 2 model (see the{" "}
+          <code className="rounded bg-white/5 px-1 py-0.5 font-mono text-[12px] text-white/70">
+            ml/
+          </code>{" "}
+          project). Aim for 30 or more balanced samples per label, with variety
+          in position, distance, and speed.
         </p>
       </header>
 
@@ -209,23 +217,23 @@ export default function CapturePage() {
           className="pointer-events-none absolute inset-0 h-full w-full"
         />
         {recording && (
-          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/40">
+          <div className="absolute inset-x-0 bottom-0 z-40 h-1.5 bg-black/40">
             <div
-              className="h-full bg-red-500 transition-[width] duration-75"
+              className="h-full bg-[var(--hostile)] transition-[width] duration-75"
               style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>
         )}
         {recording && (
-          <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-white">
-            <span className="h-2 w-2 animate-ping rounded-full bg-white" />
-            RECORDING
+          <div className="absolute left-3 top-3 z-40 flex items-center gap-2 rounded-full bg-[var(--hostile)] px-3 py-1.5 text-xs font-semibold text-white">
+            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-white" />
+            Recording
           </div>
         )}
       </WebcamFeed>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg bg-white/5 p-1 ring-1 ring-white/10">
+      <div className="reveal reveal-2 mt-5 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-[var(--line)] bg-white/[0.03] p-1">
           {(["normal", "hostile"] as Label[]).map((l) => (
             <button
               key={l}
@@ -234,9 +242,9 @@ export default function CapturePage() {
               className={`rounded-md px-4 py-2 text-sm font-medium capitalize transition disabled:opacity-50 ${
                 label === l
                   ? l === "hostile"
-                    ? "bg-red-500 text-white"
-                    : "bg-teal-400 text-ink"
-                  : "text-white/60 hover:text-white"
+                    ? "bg-[var(--hostile)] text-white"
+                    : "bg-accent text-[var(--accent-ink)]"
+                  : "text-white/55 hover:text-white"
               }`}
             >
               {l}
@@ -247,35 +255,36 @@ export default function CapturePage() {
         <button
           onClick={startRecording}
           disabled={recording || modelStatus !== "ready"}
-          className="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+          className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-[var(--accent-ink)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
         >
-          {recording ? "Recording…" : `Record ${label} clip`}
+          {recording ? "Recording" : `Record ${label} clip`}
         </button>
 
-        <div className="ml-auto flex items-center gap-4 text-sm">
-          <span className="text-teal-300">normal: {counts.normal}</span>
-          <span className="text-red-300">hostile: {counts.hostile}</span>
+        <div className="tnum ml-auto flex items-center gap-4 text-sm">
+          <span className="text-[var(--calm)]">normal {counts.normal}</span>
+          <span className="text-[var(--hostile)]">hostile {counts.hostile}</span>
           <button
             onClick={exportJson}
             disabled={samples.length === 0}
-            className="rounded-lg bg-white/10 px-4 py-2 font-medium text-white transition hover:bg-white/15 disabled:opacity-40"
+            className="rounded-lg border border-[var(--line)] bg-white/[0.04] px-4 py-2 font-medium text-white transition hover:bg-white/[0.08] disabled:opacity-40"
           >
             Export JSON
           </button>
           <button
             onClick={() => setSamples([])}
             disabled={samples.length === 0}
-            className="text-white/40 transition hover:text-white/70 disabled:opacity-40"
+            className="rounded-md px-2 py-1 text-white/45 transition hover:text-white/80 disabled:opacity-40"
           >
             Reset
           </button>
         </div>
       </div>
 
-      <p className="mt-4 text-xs text-white/40">
-        Each clip captures {SEQ_LEN} frames (~1s) of the highest-confidence
-        person. Recording auto-stops when full, and cancels if the person leaves
-        frame. Balanced classes matter — record roughly equal counts.
+      <p className="reveal reveal-3 mt-4 text-xs leading-relaxed text-white/40">
+        Each clip captures {SEQ_LEN} frames (about one second) of the
+        highest-confidence person. Recording stops automatically when full, and
+        cancels if the person leaves frame. Balanced classes matter, so record
+        roughly equal counts.
       </p>
     </main>
   );

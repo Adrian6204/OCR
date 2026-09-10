@@ -1,4 +1,4 @@
-import {
+﻿import {
   isVisible,
   L_HIP,
   L_SHOULDER,
@@ -12,7 +12,7 @@ import {
 // The data contract shared by the capture tool (training-data producer) and the
 // live classifier (inference consumer). Because BOTH normalize with the exact
 // same code here, and the exported training JSON stores already-normalized
-// vectors, the Python trainer never normalizes — it just consumes these
+// vectors, the Python trainer never normalizes, it just consumes these
 // vectors. That removes any chance of a JS/Python normalization mismatch.
 // ---------------------------------------------------------------------------
 

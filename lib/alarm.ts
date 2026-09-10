@@ -1,9 +1,9 @@
-type WindowWithWebkit = Window & { webkitAudioContext?: typeof AudioContext };
+﻿type WindowWithWebkit = Window & { webkitAudioContext?: typeof AudioContext };
 
 /**
  * Short audible alarm for hostile events. The AudioContext must be created from
  * a user gesture (browser autoplay policy), which is why the monitor is "armed"
- * with a click before it can sound — a natural one-time setup step for an
+ * with a click before it can sound, a natural one-time setup step for an
  * otherwise unattended system.
  */
 export class Alarm {
@@ -26,7 +26,7 @@ export class Alarm {
     await this.ctx.resume();
   }
 
-  /** Three quick square-wave pulses — a recognizable alert chirp. */
+  /** Three quick square-wave pulses, a recognizable alert chirp. */
   beep(): void {
     const ctx = this.ctx;
     if (!ctx) return;

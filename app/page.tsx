@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import WebcamFeed from "@/components/WebcamFeed";
@@ -23,6 +23,17 @@ import { normalizePose, SequenceBuffer } from "@/lib/poseSequence";
 import { classifySequence, loadClassifier } from "@/lib/classifier";
 import { fuse } from "@/lib/fusion";
 import { Alarm } from "@/lib/alarm";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  Cpu,
+  Crosshair,
+  Play,
+  ShieldEye,
+  Square,
+} from "@/components/icons";
 import Link from "next/link";
 
 type ModelStatus = "loading" | "ready" | "error";
@@ -70,9 +81,10 @@ export default function Page() {
   const objFrameRef = useRef(0);
   const lastIncidentRef = useRef(0);
 
-  // Layer 2 classifier plumbing.
-  const seqBufferRef = useRef(new SequenceBuffer());
-  const lastFedIdRef = useRef<number | null>(null);
+  // Layer 2 classifier plumbing. Per-person sequence buffers (keyed by track id)
+  // so several people can be scored and switching subjects doesn't corrupt a
+  // sequence. Dormant unless a trained model is loaded.
+  const buffersRef = useRef(new Map<number, SequenceBuffer>());
   const aiEnabledRef = useRef(false);
   const aiBusyRef = useRef(false);
   const frameCounterRef = useRef(0);
@@ -115,7 +127,7 @@ export default function Page() {
       try {
         await alarmRef.current.unlock();
       } catch {
-        /* audio unavailable — notifications may still work */
+        /* audio unavailable, notifications may still work */
       }
       if (typeof Notification !== "undefined") {
         try {
@@ -162,7 +174,7 @@ export default function Page() {
     };
   }, []);
 
-  // Load the object detector (optional — weapon detection degrades gracefully).
+  // Load the object detector (optional, weapon detection degrades gracefully).
   useEffect(() => {
     let active = true;
     getObjectDetector()
@@ -175,7 +187,7 @@ export default function Page() {
     };
   }, []);
 
-  // Detection loop — runs only once both the camera and model are ready.
+  // Detection loop, runs only once both the camera and model are ready.
   useEffect(() => {
     if (!cameraReady || modelStatus !== "ready") return;
 
@@ -194,7 +206,7 @@ export default function Page() {
           poses = detectPoses(landmarker, video, performance.now());
           posesCacheRef.current = poses;
 
-          // Object detection is heavier — run it every 5th frame and reuse the
+          // Object detection is heavier, run it every 5th frame and reuse the
           // cached result in between (held objects move slowly relative to pose).
           const od = objectDetectorRef.current;
           if (od) {
@@ -214,34 +226,32 @@ export default function Page() {
         overlayRef.current?.draw(assessment.people, objects);
         setScene(assessment);
 
-        // --- Layer 2: feed the highest-threat person's motion to the model ---
+        // --- Layer 2: maintain a motion buffer per tracked person ---
         if (aiEnabledRef.current) {
+          const buffers = buffersRef.current;
+          const present = new Set(assessment.people.map((p) => p.id));
+          for (const id of Array.from(buffers.keys())) {
+            if (!present.has(id)) buffers.delete(id);
+          }
+          for (const p of assessment.people) {
+            let b = buffers.get(p.id);
+            if (!b) {
+              b = new SequenceBuffer();
+              buffers.set(p.id, b);
+            }
+            b.push(normalizePose(p.pose));
+          }
+
+          // Classify the highest-threat person whose buffer is ready (throttled,
+          // non-overlapping). Its own buffer keeps history across subject switches.
+          frameCounterRef.current++;
           const top = assessment.people.reduce<(typeof assessment.people)[number] | null>(
             (m, p) => (m && m.threat >= p.threat ? m : p),
             null
           );
-          if (top) {
-            // Reset the window when the tracked subject changes, so the
-            // sequence stays coherent for one person.
-            if (lastFedIdRef.current !== top.id) {
-              seqBufferRef.current.clear();
-              lastFedIdRef.current = top.id;
-            }
-            seqBufferRef.current.push(normalizePose(top.pose));
-          } else {
-            seqBufferRef.current.clear();
-            lastFedIdRef.current = null;
-            setAiScore(null);
-          }
-
-          frameCounterRef.current++;
-          const buf = seqBufferRef.current;
-          if (
-            frameCounterRef.current % 6 === 0 &&
-            buf.ready &&
-            !aiBusyRef.current
-          ) {
-            const tensor = buf.toFloat32();
+          if (!top) setAiScore(null);
+          if (frameCounterRef.current % 6 === 0 && !aiBusyRef.current && top) {
+            const tensor = buffers.get(top.id)?.toFloat32();
             if (tensor) {
               aiBusyRef.current = true;
               classifySequence(tensor)
@@ -273,8 +283,7 @@ export default function Page() {
       objectsCacheRef.current = [];
       overlayRef.current?.clear();
       setScene(IDLE_SCENE);
-      seqBufferRef.current.clear();
-      lastFedIdRef.current = null;
+      buffersRef.current.clear();
       setAiScore(null);
     };
   }, [cameraReady, modelStatus]);
@@ -321,7 +330,7 @@ export default function Page() {
             body: `Threat ${fused.score}/100 · ${new Date(now).toLocaleTimeString()}`,
           });
         } catch {
-          /* notification failed — incident is still logged */
+          /* notification failed, incident is still logged */
         }
       }
     }
@@ -329,158 +338,223 @@ export default function Page() {
   }, [fused.alert]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-200/90">
-        <span aria-hidden className="mt-0.5 text-base leading-none">⚠</span>
-        <p>
-          <span className="font-semibold">Proof-of-concept demo — not a real
-          security system.</span>{" "}
-          Threat scores come from motion heuristics and can be wrong (a
-          high-five, a fast reach, or a held kitchen knife may all trigger).
-          Don&apos;t use it to make decisions about real people.
-        </p>
-      </div>
-
-      <header className="mb-8">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            Sentinel
-          </h1>
-          <StatusBadge
-            modelStatus={modelStatus}
-            people={scene.people.length}
-            fps={fps}
-          />
-          <Link
-            href="/capture"
-            className="ml-auto rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-white/60 ring-1 ring-white/10 transition hover:text-white"
-          >
-            Capture training data →
-          </Link>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--bg)]/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/12 text-accent ring-1 ring-accent/25">
+            <ShieldEye size={20} />
+          </span>
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-[15px] font-semibold tracking-tight text-white">
+              Sentinel
+            </span>
+            <span className="hidden items-center gap-1.5 rounded-full border border-[var(--line)] bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/45 sm:inline-flex">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+              Active development
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <StatusBadge
+              modelStatus={modelStatus}
+              people={scene.people.length}
+              fps={fps}
+            />
+            <Link
+              href="/capture"
+              className="group hidden items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/60 transition hover:border-[var(--line-strong)] hover:text-white sm:inline-flex"
+            >
+              Capture data
+              <ArrowRight
+                size={13}
+                className="transition-transform group-hover:translate-x-0.5"
+              />
+            </Link>
+          </div>
         </div>
-        <p className="mt-2 max-w-2xl text-sm text-white/50">
-          A CCTV-style safety monitor. On-device multi-person pose tracking
-          (MediaPipe) reads body movement and flags likely hostile acts — fast
-          strikes, lunges, close contact — with a live threat score. Runs
-          entirely client-side; no video leaves your machine.
-        </p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-4">
-          <WebcamFeed
-            videoRef={videoRef}
-            onReady={() => setCameraReady(true)}
-            onStatusChange={(s) => {
-              if (s !== "ready") setCameraReady(false);
-            }}
-          >
-            <PoseOverlay
-              ref={overlayRef}
-              className="pointer-events-none absolute inset-0 z-20 h-full w-full"
-            />
-            <CctvChrome />
-            {fused.alert && (
-              <>
-                <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl ring-4 ring-inset ring-red-500/70 animate-pulse" />
-                <div className="absolute right-3 top-3 z-30 flex items-center gap-2 rounded-full bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg">
-                  <span className="h-2 w-2 animate-ping rounded-full bg-white" />
-                  HOSTILE ACTIVITY
+      <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+        <section className="reveal reveal-1 pt-10 sm:pt-14">
+          <h1 className="max-w-3xl text-3xl font-semibold leading-[1.1] tracking-tight text-white sm:text-[2.6rem]">
+            Real-time hostile-act detection,{" "}
+            <span className="text-accent">running entirely in your browser.</span>
+          </h1>
+          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/55">
+            Sentinel tracks everyone in frame, watches for weapons, and reads
+            body movement for signs of a fight: fast strikes, lunges, and close
+            contact. On-device MediaPipe means no video ever leaves your machine.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Capability icon={<Cpu size={14} />} label="On-device, no server" />
+            <Capability icon={<Crosshair size={14} />} label="Multi-person pose" />
+            <Capability icon={<AlertTriangle size={14} />} label="Weapon-aware" />
+            <Capability icon={<Activity size={14} />} label="Trainable model" />
+          </div>
+        </section>
+
+        <div className="reveal reveal-2 mt-8 flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-200/90">
+          <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-300" />
+          <p className="leading-relaxed">
+            <span className="font-semibold text-amber-200">
+              Proof-of-concept demo, not a real security system.
+            </span>{" "}
+            Threat scores come from motion heuristics and can be wrong. A
+            high-five, a fast reach, or a held kitchen knife may all trigger it.
+            Please don&apos;t use it to make decisions about real people.
+          </p>
+        </div>
+
+        <div className="reveal reveal-3 mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+          <div className="space-y-5">
+            <WebcamFeed
+              videoRef={videoRef}
+              onReady={() => setCameraReady(true)}
+              onStatusChange={(s) => {
+                if (s !== "ready") setCameraReady(false);
+              }}
+            >
+              <PoseOverlay
+                ref={overlayRef}
+                className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+              />
+              <CctvChrome />
+              {fused.alert && (
+                <>
+                  <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl ring-[3px] ring-inset ring-[var(--hostile)]/70 animate-pulse" />
+                  <div className="absolute right-3 top-3 z-30 flex items-center gap-2 rounded-full bg-[var(--hostile)] px-3 py-1.5 text-xs font-semibold text-white shadow-[0_8px_24px_-6px_rgba(251,106,104,0.6)]">
+                    <span className="h-1.5 w-1.5 animate-ping rounded-full bg-white" />
+                    Hostile activity
+                  </div>
+                </>
+              )}
+              {modelStatus === "loading" && cameraReady && (
+                <div className="absolute bottom-3 left-3 z-30 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white/70 backdrop-blur">
+                  Loading pose model
                 </div>
-              </>
-            )}
-            {modelStatus === "loading" && cameraReady && (
-              <div className="absolute bottom-3 left-3 z-30 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white/70 backdrop-blur">
-                Loading pose model…
-              </div>
-            )}
-          </WebcamFeed>
+              )}
+            </WebcamFeed>
 
-          <Controls
-            armed={armed}
-            notifyOk={notifyOk}
-            onToggleArm={toggleArm}
-            sensitivity={sensitivity}
-            onSensitivity={setSensitivity}
-          />
+            <Controls
+              armed={armed}
+              notifyOk={notifyOk}
+              onToggleArm={toggleArm}
+              sensitivity={sensitivity}
+              onSensitivity={setSensitivity}
+            />
 
-          <IncidentLog
-            incidents={incidents}
-            onClear={() => setIncidents([])}
-          />
+            <IncidentLog incidents={incidents} onClear={() => setIncidents([])} />
+          </div>
+
+          <div className="min-h-[420px]">
+            <ThreatPanel
+              scene={scene}
+              fused={fused}
+              aiEnabled={aiEnabled}
+              aiScore={aiScore}
+            />
+          </div>
         </div>
 
-        <div className="min-h-[420px]">
-          <ThreatPanel
-            scene={scene}
-            fused={fused}
-            aiEnabled={aiEnabled}
-            aiScore={aiScore}
-          />
-        </div>
-      </div>
+        <AboutSection />
+      </main>
 
-      <AboutSection />
-    </main>
+      <SiteFooter />
+    </div>
+  );
+}
+
+function Capability({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-white/[0.02] px-3 py-1.5 text-xs font-medium text-white/60">
+      <span className="text-accent">{icon}</span>
+      {label}
+    </span>
   );
 }
 
 function AboutSection() {
   return (
-    <section className="mt-10 border-t border-white/10 pt-8">
-      <div className="grid gap-8 sm:grid-cols-2">
-        <div>
-          <h3 className="text-sm font-semibold text-white/80">How it works</h3>
-          <ul className="mt-3 space-y-2 text-sm text-white/50">
-            <li>
-              <span className="text-white/70">On-device only.</span> MediaPipe
-              runs in your browser — no video ever leaves your machine, and there
-              is no server.
-            </li>
-            <li>
-              <span className="text-white/70">Pose + objects.</span> Multi-person
-              body tracking plus an object detector that spots held knives,
-              scissors, or bats.
-            </li>
-            <li>
-              <span className="text-white/70">Threat heuristic.</span> A score
-              built from wrist speed, arm extension, proximity to others, and
-              whether someone is armed.
-            </li>
-            <li>
-              <span className="text-white/70">Optional trained model.</span> A
-              GRU can be trained on your own captured clips and fused with the
-              heuristic (see the capture tool + <code className="text-white/70">ml/</code>).
-            </li>
-          </ul>
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-white/80">Limitations</h3>
-          <ul className="mt-3 space-y-2 text-sm text-white/50">
-            <li>
-              <span className="text-amber-300/80">False positives are
-              expected</span> — the heuristic reacts to fast motion, not intent.
-            </li>
-            <li>
-              <span className="text-amber-300/80">No firearm detection</span> —
-              guns aren&apos;t a COCO class; only sharp/blunt held objects are
-              caught.
-            </li>
-            <li>
-              Single camera, single view; occlusion and crowding reduce accuracy.
-            </li>
-            <li>
-              Running two vision models is demanding — expect lower framerates on
-              low-end devices.
-            </li>
-            <li>
-              This is a demonstration of a technique, <span className="text-white/70">not
-              a validated safety product.</span>
-            </li>
-          </ul>
-        </div>
+    <section className="mt-12 grid gap-10 border-t border-[var(--line)] pt-10 sm:grid-cols-2">
+      <div>
+        <h2 className="text-sm font-semibold text-white/85">How it works</h2>
+        <ul className="mt-4 space-y-3 text-sm leading-relaxed text-white/50">
+          <li>
+            <span className="text-white/75">On-device only.</span> MediaPipe runs
+            in your browser. No video ever leaves your machine, and there is no
+            server.
+          </li>
+          <li>
+            <span className="text-white/75">Pose and objects.</span> Multi-person
+            body tracking plus an object detector that spots held knives,
+            scissors, or bats.
+          </li>
+          <li>
+            <span className="text-white/75">Threat heuristic.</span> A score
+            built from wrist speed, arm extension, proximity to others, and
+            whether someone is armed.
+          </li>
+          <li>
+            <span className="text-white/75">Optional trained model.</span> A GRU
+            can be trained on your own captured clips and fused with the
+            heuristic (see the capture tool and the{" "}
+            <code className="rounded bg-white/5 px-1 py-0.5 font-mono text-[12px] text-white/70">
+              ml/
+            </code>{" "}
+            project).
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h2 className="text-sm font-semibold text-white/85">Limitations</h2>
+        <ul className="mt-4 space-y-3 text-sm leading-relaxed text-white/50">
+          <li>
+            <span className="text-amber-300/85">False positives are expected.</span>{" "}
+            The heuristic reacts to fast motion, not intent.
+          </li>
+          <li>
+            <span className="text-amber-300/85">No firearm detection.</span> Guns
+            aren&apos;t a COCO class, so only sharp or blunt held objects are
+            caught.
+          </li>
+          <li>Single camera, single view. Occlusion and crowding reduce accuracy.</li>
+          <li>
+            Running two vision models is demanding, so expect lower framerates on
+            low-end devices.
+          </li>
+          <li>
+            This is a demonstration of a technique,{" "}
+            <span className="text-white/75">not a validated safety product.</span>
+          </li>
+        </ul>
       </div>
     </section>
+  );
+}
+
+function SiteFooter() {
+  return (
+    <footer className="border-t border-[var(--line)]">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex items-start gap-2.5 text-xs text-white/45">
+          <Activity size={15} className="mt-px shrink-0 text-accent" />
+          <p className="max-w-md leading-relaxed">
+            <span className="text-white/70">Continuously in development.</span>{" "}
+            An evolving proof-of-concept. The heuristics and trained model keep
+            improving as more data and tuning land.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] font-medium text-white/40">
+          {["Next.js", "MediaPipe", "ONNX", "PyTorch"].map((t) => (
+            <span
+              key={t}
+              className="rounded-md border border-[var(--line)] bg-white/[0.02] px-2 py-1"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -498,36 +572,33 @@ function Controls({
   onSensitivity: (v: number) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-2xl bg-panel px-5 py-4 ring-1 ring-white/10">
+    <div className="card space-y-3.5 p-5">
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={onToggleArm}
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
             armed
-              ? "bg-red-500/15 text-red-300 ring-1 ring-red-500/40 hover:bg-red-500/25"
-              : "bg-accent text-ink hover:bg-accent/90"
+              ? "bg-[var(--hostile)]/12 text-[var(--hostile)] ring-1 ring-[var(--hostile)]/40 hover:bg-[var(--hostile)]/20"
+              : "bg-accent text-[var(--accent-ink)] hover:brightness-110"
           }`}
         >
-          <span
-            className={`h-2 w-2 rounded-full ${
-              armed ? "animate-pulse bg-red-400" : "bg-ink/60"
-            }`}
-          />
-          {armed ? "Armed — monitoring" : "Arm monitor"}
+          {armed ? <Square size={13} /> : <Play size={13} />}
+          {armed ? "Armed, monitoring" : "Arm monitor"}
         </button>
 
-        <span className="text-xs text-white/40">
+        <span className="flex items-center gap-1.5 text-xs text-white/45">
+          <Bell size={13} className={armed ? "text-accent" : "text-white/30"} />
           {armed
             ? notifyOk
-              ? "Alarm + desktop notifications active"
-              : "Alarm active · enable notifications for background alerts"
-            : "Arm to enable the alarm and desktop notifications, then you can leave it running"}
+              ? "Alarm and desktop notifications active"
+              : "Alarm active. Allow notifications for background alerts"
+            : "Arm to enable the alarm and notifications, then leave it running"}
         </span>
       </div>
 
-      <div className="border-t border-white/5 pt-3">
+      <div className="border-t border-[var(--line)] pt-3.5">
         <label className="flex items-center gap-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-white/50">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-white/45">
             Sensitivity
           </span>
           <input
@@ -537,14 +608,14 @@ function Controls({
             step={0.05}
             value={sensitivity}
             onChange={(e) => onSensitivity(Number(e.target.value))}
-            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-teal-400"
+            className="h-1.5 flex-1 cursor-pointer"
           />
-          <span className="w-10 text-right font-mono text-xs text-white/50 tabular-nums">
+          <span className="tnum w-10 text-right font-mono text-xs text-white/55">
             {Math.round(sensitivity * 100)}%
           </span>
         </label>
-        <p className="mt-1.5 text-[11px] text-white/35">
-          Set once during setup — saved to this browser and reused automatically.
+        <p className="mt-2 text-[11px] leading-relaxed text-white/35">
+          Set once during setup. Saved to this browser and reused automatically.
         </p>
       </div>
     </div>
@@ -562,16 +633,16 @@ function StatusBadge({
 }) {
   const { color, label } =
     modelStatus === "error"
-      ? { color: "bg-red-400", label: "Model failed to load" }
+      ? { color: "bg-[var(--hostile)]", label: "Model failed" }
       : modelStatus === "loading"
-        ? { color: "bg-amber-400 animate-pulse", label: "Loading model" }
+        ? { color: "bg-[var(--elevated)] animate-pulse", label: "Loading model" }
         : people > 0
           ? { color: "bg-accent", label: `${people} tracked · ${fps} fps` }
-          : { color: "bg-white/40", label: "Monitoring · no one in frame" };
+          : { color: "bg-white/40", label: "No one in frame" };
 
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-white/70 ring-1 ring-white/10">
-      <span className={`h-2 w-2 rounded-full ${color}`} />
+    <span className="tnum inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/70">
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
       {label}
     </span>
   );

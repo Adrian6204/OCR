@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import { POSE_CONNECTIONS, isVisible, type Keypoint } from "@/lib/poseTracking";
+import { isVisible } from "@/lib/poseTracking";
 import type { Person, ThreatLevel } from "@/lib/threatDetect";
 import type { DetectedObject } from "@/lib/objectDetection";
 
@@ -46,12 +46,10 @@ const PoseOverlay = forwardRef<PoseOverlayHandle, { className?: string }>(
       h: number
     ) {
       const color = LEVEL_COLOR[person.level];
-      const pose = person.pose;
-      const px = (p: Keypoint) => (1 - p.x) * w; // mirror x
-      const py = (p: Keypoint) => p.y * h;
 
-      // Bounding box around visible points.
-      const vis = pose.filter(isVisible);
+      // Bounding box around visible points (mirrored x). No skeleton, a clean
+      // box keeps the view readable and puts the focus on the behavior label.
+      const vis = person.pose.filter(isVisible);
       if (vis.length === 0) return;
       let minX = 1;
       let minY = 1;
@@ -63,52 +61,43 @@ const PoseOverlay = forwardRef<PoseOverlayHandle, { className?: string }>(
         minY = Math.min(minY, p.y);
         maxY = Math.max(maxY, p.y);
       }
+      const pad = w * 0.012;
       const bx = minX * w;
       const by = minY * h;
       const bw = (maxX - minX) * w;
       const bh = (maxY - minY) * h;
 
+      // Box, bolder as threat rises.
       ctx.strokeStyle = color;
-      ctx.globalAlpha = person.level === "calm" ? 0.35 : 0.9;
-      ctx.lineWidth = person.level === "hostile" ? 3 : 1.5;
-      roundRect(ctx, bx - 6, by - 6, bw + 12, bh + 12, 8);
+      ctx.globalAlpha = person.level === "calm" ? 0.6 : 0.95;
+      ctx.lineWidth = person.level === "hostile" ? 3.5 : 2;
+      roundRect(ctx, bx - pad, by - pad, bw + pad * 2, bh + pad * 2, 10);
       ctx.stroke();
-
-      // Skeleton bones.
-      ctx.globalAlpha = 0.95;
-      ctx.lineWidth = Math.max(2, w * 0.003);
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      for (const [a, b] of POSE_CONNECTIONS) {
-        if (!isVisible(pose[a]) || !isVisible(pose[b])) continue;
-        ctx.moveTo(px(pose[a]), py(pose[a]));
-        ctx.lineTo(px(pose[b]), py(pose[b]));
-      }
-      ctx.stroke();
-
-      // Joints.
-      const r = Math.max(2.5, w * 0.004);
-      ctx.fillStyle = color;
-      for (const p of vis) {
-        ctx.beginPath();
-        ctx.arc((1 - p.x) * w, p.y * h, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Label chip above the box.
       ctx.globalAlpha = 1;
-      const label = `#${person.id} · ${person.threat}`;
+
+      // Label chip above the box: id · level · score.
+      const label = `#${person.id}  ${person.level.toUpperCase()}  ${person.threat}`;
       ctx.font = `600 ${Math.round(w * 0.02)}px ui-monospace, monospace`;
       const padX = w * 0.01;
       const textW = ctx.measureText(label).width;
-      const chipH = w * 0.03;
-      const chipY = Math.max(0, by - 6 - chipH - 4);
+      const chipH = w * 0.032;
+      const chipX = bx - pad;
+      const chipY = Math.max(0, by - pad - chipH - 3);
       ctx.fillStyle = color;
-      roundRect(ctx, bx - 6, chipY, textW + padX * 2, chipH, 5);
+      roundRect(ctx, chipX, chipY, textW + padX * 2, chipH, 5);
       ctx.fill();
       ctx.fillStyle = "#0a0a0f";
+      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, bx - 6 + padX, chipY + chipH / 2);
+      ctx.fillText(label, chipX + padX, chipY + chipH / 2);
+
+      // Behavior tags under the box, the "what is this person doing" summary.
+      if (person.flags.length > 0) {
+        ctx.font = `500 ${Math.round(w * 0.017)}px ui-monospace, monospace`;
+        ctx.fillStyle = color;
+        ctx.textBaseline = "top";
+        ctx.fillText(person.flags.join("  ·  "), chipX, by + bh + pad + 3);
+      }
     }
 
     function drawObject(

@@ -1,4 +1,4 @@
-import {
+﻿import {
   FilesetResolver,
   ObjectDetector,
   type ObjectDetectorResult,
@@ -12,7 +12,7 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.task";
 
 // COCO categories we treat as weapons / sharp or blunt objects of concern.
-// Note: COCO has no "gun"/"firearm" class — detecting firearms needs a custom
+// Note: COCO has no "gun"/"firearm" class, detecting firearms needs a custom
 // trained model. These are the weapon-relevant classes COCO does provide.
 export const WEAPON_CATEGORIES = ["knife", "scissors", "baseball bat"];
 
@@ -47,7 +47,7 @@ export interface DetectedObject {
   category: string;
   score: number;
   box: { x: number; y: number; w: number; h: number };
-  /** Box center, normalized — used to check which hand is holding it. */
+  /** Box center, normalized, used to check which hand is holding it. */
   center: { x: number; y: number };
 }
 

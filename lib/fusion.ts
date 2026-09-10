@@ -1,4 +1,4 @@
-import type { SceneAssessment, ThreatLevel } from "./threatDetect";
+﻿import type { SceneAssessment, ThreatLevel } from "./threatDetect";
 
 // Fuse the two independent signals into a single verdict:
 //   - Heuristic (Layer 1): instant and reactive, but false-positive prone.
@@ -6,16 +6,16 @@ import type { SceneAssessment, ThreatLevel } from "./threatDetect";
 //     but only present once a model has been trained.
 // When no model is loaded, the fused verdict is exactly the heuristic. When
 // both are present, the model is weighted higher, and agreement between the two
-// escalates confidence (corroboration) — the standard way to cut false alarms
+// escalates confidence (corroboration), the standard way to cut false alarms
 // without going blind to real events.
 
 const MODEL_WEIGHT = 0.6;
 const HEURISTIC_WEIGHT = 0.4;
 const CORROBORATION_BOOST = 1.15;
 
-const H_HIGH = 0.55; // heuristic "confident" threshold (0..1)
+const H_HIGH = 0.6; // heuristic "confident" threshold (0..1)
 const M_HIGH = 0.6; // model "confident" threshold (0..1)
-const ALERT_AT = 55; // fused score that raises an alert
+const ALERT_AT = 62; // fused score that raises an alert (matches HOSTILE_AT)
 
 export type Agreement =
   | "none" // no model contributing
@@ -35,7 +35,7 @@ export interface FusedAssessment {
 }
 
 function levelFor(score: number): ThreatLevel {
-  if (score >= 55) return "hostile";
+  if (score >= ALERT_AT) return "hostile";
   if (score >= 25) return "elevated";
   return "calm";
 }

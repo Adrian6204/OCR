@@ -2,3 +2,8 @@ torch>=2.2
 numpy>=1.24
 onnx>=1.16
 onnxruntime>=1.19
+
+# Optional — only needed for preprocess_dataset.py (training on public video
+# datasets). Install with:  pip install mediapipe opencv-python
+# mediapipe>=0.10.14
+# opencv-python>=4.9

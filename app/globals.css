@@ -2,22 +2,151 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ *
+ * Sentinel design tokens — a dark security-console world.
+ * ------------------------------------------------------------------ */
 :root {
   color-scheme: dark;
+
+  --bg: #08090c;
+  --bg-raise: #0e1015;
+  --panel: #12141a;
+  --panel-2: #171a22;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+
+  --text: #e8eaf0;
+  --text-dim: #9aa1b1;
+  --text-faint: #626a7c;
+
+  --accent: #5eead4;
+  --accent-ink: #04120f;
+
+  --calm: #5eead4;
+  --elevated: #fbbf24;
+  --hostile: #fb6a68;
+
+  --radius: 14px;
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 20px 48px -20px rgba(0, 0, 0, 0.8);
 }
 
-html,
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background-color: theme("colors.ink");
-  color: #e5e7eb;
+  background-color: var(--bg);
+  color: var(--text);
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle grid backdrop for the demo page */
-.bg-grid {
-  background-image: radial-gradient(
-    circle at 1px 1px,
-    rgba(255, 255, 255, 0.06) 1px,
-    transparent 0
-  );
-  background-size: 28px 28px;
+/* Layered backdrop: fine grid + a cool wash from the top. */
+.app-bg {
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(94, 234, 212, 0.06), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.045) 1px, transparent 0);
+  background-size: 100% 100%, 30px 30px;
+  background-attachment: fixed, fixed;
+}
+
+/* ---- Browser surfaces themed from the palette ---- */
+::selection {
+  background: rgba(94, 234, 212, 0.28);
+  color: #fff;
+}
+
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: content-box;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Surfaces ---- */
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+/* Range input themed from the palette. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg-raise);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.4), 0 2px 8px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--bg-raise);
+  border-radius: 999px;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* ---- One authored motion moment: a calm staggered reveal on load ---- */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.reveal {
+  animation: reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.reveal-1 { animation-delay: 0.02s; }
+.reveal-2 { animation-delay: 0.1s; }
+.reveal-3 { animation-delay: 0.18s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
 }
